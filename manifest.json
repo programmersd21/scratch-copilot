@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "Scratch Copilot",
+  "version": "1.0.0",
+  "description": "AI-powered copilot for Scratch. Generate games with natural language.",
+  "permissions": [],
+  "content_scripts": [
+    {
+      "matches": ["https://scratch.mit.edu/projects/*"],
+      "js": ["vmController.js", "aiClient.js", "ui.js", "content.js"],
+      "run_at": "document_idle",
+      "world": "MAIN"
+    }
+  ]
+}
