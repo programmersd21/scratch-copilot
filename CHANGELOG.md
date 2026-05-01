@@ -12,4 +12,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - Developed VM Controller for real-time Scratch project modification.
 - Implemented modern UI with a 🤖 launcher, dark mode, and chat interface.
 - Added project structure: `README.md`, `LICENSE`, `.gitignore`, and governance templates.
-- Configured robust library loading with fallback mechanisms for missing assets.
+
+## [1.0.1] - 2026-05-01
+
+### Fixed
+- Resolved "Cannot read properties of undefined (reading 'indexOf')" runtime error in Scratch VM during sound loading.
+- Fixed block injection bug where dropdown menus (sounds, costumes, backdrops) were being generated as plain text blocks instead of menu shadows.
+- Improved Scratch VM stability by sequentializing asset creation and block injection to prevent race conditions.
+- Enhanced sprite/sound/costume identification with additional properties (`assetId`, `md5`) for better VM compatibility.
+- Added automatic workspace switching so the user can see injected blocks immediately in the editor.
+- Fixed library searching to be more robust against missing or malformed catalog entries.

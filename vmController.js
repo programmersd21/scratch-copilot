@@ -43,10 +43,10 @@ const VMC = (() => {
   }
 
   function findLibItem(list, name) {
-    if (!list) return null;
-    const lower = name.toLowerCase().trim();
-    return list.find(i => i.name.toLowerCase() === lower)
-      || list.find(i => i.name.toLowerCase().includes(lower))
+    if (!list || !name) return null;
+    const lower = String(name).toLowerCase().trim();
+    return list.find(i => i.name && String(i.name).toLowerCase() === lower)
+      || list.find(i => i.name && String(i.name).toLowerCase().includes(lower))
       || null;
   }
 
@@ -65,11 +65,19 @@ const VMC = (() => {
     if (!entry) throw new Error(`Library costume "${libraryName}" not found`);
     const target = getTarget(targetName);
     if (!target) throw new Error(`Target "${targetName}" not found`);
-    const md5 = entry.md5ext || entry.baseLayerMD5;
+    const md5 = entry.md5ext || entry.baseLayerMD5 || entry.md5;
+    if (!md5) throw new Error(`Costume "${libraryName}" is missing MD5 data`);
+
+    const extMatch = md5.match(/\.([a-z0-9]+)$/i);
+    const dataFormat = extMatch ? extMatch[1] : "svg";
+    const assetId = md5.split('.')[0];
+
     const costume = {
       name: entry.name,
       md5ext: md5,
-      dataFormat: md5.split('.').pop(),
+      md5: md5,
+      assetId: assetId,
+      dataFormat: dataFormat,
       rotationCenterX: entry.rotationCenterX || 0,
       rotationCenterY: entry.rotationCenterY || 0,
       bitmapResolution: entry.bitmapResolution || 1
@@ -82,20 +90,40 @@ const VMC = (() => {
     const lib = await loadLibrary();
     const entry = findLibItem(lib.sounds, libraryName);
     if (!entry) {
-        console.warn(`Library sound "${libraryName}" not found, skipping.`);
-        return;
+      console.warn(`Library sound "${libraryName}" not found, skipping.`);
+      return;
     }
     const target = getTarget(targetName);
-    if (!target) return;
-    const md5 = entry.md5ext || entry.md5;
+    if (!target) {
+      console.warn(`Target sprite "${targetName}" not found for sound "${libraryName}"`);
+      return;
+    }
+    const md5 = entry.md5ext || entry.md5 || entry.assetId;
+    if (!md5) {
+      console.warn(`Sound "${libraryName}" is missing MD5 data`);
+      return;
+    }
+
+    const extMatch = md5.match(/\.([a-z0-9]+)$/i);
+    const dataFormat = extMatch ? extMatch[1] : "wav";
+    const assetId = md5.split('.')[0];
+
     const sound = {
       name: entry.name,
       md5ext: md5,
-      dataFormat: md5.split('.').pop(),
+      md5: md5,
+      assetId: assetId,
+      dataFormat: dataFormat,
       rate: entry.rate || entry.sampleRate || 44100,
+      sampleRate: entry.rate || entry.sampleRate || 44100,
       sampleCount: entry.sampleCount || 0
     };
-    await getVM().addSound(sound, target.id);
+    try {
+      await getVM().addSound(sound, target.id);
+    } catch (e) {
+      console.error(`VM addSound error for "${libraryName}":`, e);
+      throw e;
+    }
     return sound;
   }
 
@@ -103,16 +131,27 @@ const VMC = (() => {
     const lib = await loadLibrary();
     const entry = findLibItem(lib.backdrops, libraryName);
     if (!entry) {
-        console.warn(`Library backdrop "${libraryName}" not found, using default.`);
-        return;
+      console.warn(`Library backdrop "${libraryName}" not found, using default.`);
+      return;
     }
     const stage = getTarget("Stage");
     if (!stage) return;
-    const md5 = entry.md5ext || entry.baseLayerMD5;
+    const md5 = entry.md5ext || entry.baseLayerMD5 || entry.md5;
+    if (!md5) {
+      console.warn(`Backdrop "${libraryName}" is missing MD5 data`);
+      return;
+    }
+
+    const extMatch = md5.match(/\.([a-z0-9]+)$/i);
+    const dataFormat = extMatch ? extMatch[1] : "svg";
+    const assetId = md5.split('.')[0];
+
     const costume = {
       name: entry.name,
       md5ext: md5,
-      dataFormat: md5.split('.').pop(),
+      md5: md5,
+      assetId: assetId,
+      dataFormat: dataFormat,
       rotationCenterX: entry.rotationCenterX || 240,
       rotationCenterY: entry.rotationCenterY || 180,
       bitmapResolution: entry.bitmapResolution || 1
@@ -149,24 +188,30 @@ const VMC = (() => {
   /* ───── Project Summary ───── */
 
   function getProjectSummary() {
-    const rt = getRuntime();
-    const summary = { sprites: [], extensions: getLoadedExtensions() };
-    for (const target of rt.targets) {
-      summary.sprites.push({
-        name: target.sprite.name,
-        isStage: target.isStage,
-        x: target.x, y: target.y,
-        visible: target.visible,
-        size: target.size,
-        direction: target.direction,
-        costumes: target.sprite.costumes.map(c => c.name),
-        sounds: target.sprite.sounds.map(s => s.name),
-        variables: Object.values(target.variables).map(v => ({ name: v.name, value: v.value })),
-        lists: Object.values(target.variables).filter(v => v.type === "list").map(v => ({ name: v.name })),
-        scriptCount: Object.values(target.blocks._blocks).filter(b => b.topLevel).length
-      });
+    try {
+      const rt = getRuntime();
+      const summary = { sprites: [], extensions: getLoadedExtensions() };
+      for (const target of rt.targets) {
+        if (!target.sprite) continue;
+        summary.sprites.push({
+          name: target.sprite.name || "Unknown",
+          isStage: target.isStage,
+          x: target.x, y: target.y,
+          visible: target.visible,
+          size: target.size,
+          direction: target.direction,
+          costumes: (target.sprite.costumes || []).map(c => c.name),
+          sounds: (target.sprite.sounds || []).map(s => s.name),
+          variables: Object.values(target.variables || {}).map(v => ({ name: v.name, value: v.value })),
+          lists: Object.values(target.variables || {}).filter(v => v.type === "list").map(v => ({ name: v.name })),
+          scriptCount: Object.values((target.blocks && target.blocks._blocks) || {}).filter(b => b.topLevel).length
+        });
+      }
+      return JSON.stringify(summary, null, 2);
+    } catch (e) {
+      console.error("[ScratchCopilot] getProjectSummary error:", e);
+      return JSON.stringify({ error: e.message, stack: e.stack });
     }
-    return JSON.stringify(summary, null, 2);
   }
 
   /* ───── Extensions ───── */
@@ -183,18 +228,18 @@ const VMC = (() => {
 
     // Try finding the manager in multiple common Scratch locations
     const manager = rt.extensionManager || vm.extensionManager || window.extensionManager;
-    
+
     if (manager) {
-      try { 
+      try {
         // Some versions use URL, others use ID. Try common patterns.
         const url = extensionId.startsWith("http") ? extensionId : `scratch3_${extensionId}`;
         await manager.loadExtensionURL(url);
-        
+
         // Wait for registration
         await new Promise(resolve => setTimeout(resolve, 1000));
-        return true; 
+        return true;
       }
-      catch (e) { 
+      catch (e) {
         console.error(`Extension load error:`, e);
       }
     }
@@ -374,7 +419,7 @@ const VMC = (() => {
     if (!Array.isArray(inputVal)) {
       // Not in sb3 array format — treat as a direct value
       const shadowId = genId();
-      extraBlocks.push(makeShadowBlock(shadowId, 10, String(inputVal), parentId));
+      extraBlocks.push(makeShadowBlock(shadowId, 10, String(inputVal), parentId, inputName));
       return { input: { name: inputName, block: shadowId, shadow: shadowId }, extraBlocks };
     }
 
@@ -618,7 +663,7 @@ const VMC = (() => {
       let scriptArray;
       let x = 0;
       let y = 0;
-      
+
       if (Array.isArray(script)) {
         scriptArray = script;
       } else if (script.blocks && Array.isArray(script.blocks)) {
@@ -633,12 +678,12 @@ const VMC = (() => {
     }
 
     target.blocks.resetCache();
-    
+
     // Request UI refresh
     try {
       if (window.vm && window.vm.emitWorkspaceUpdate) window.vm.emitWorkspaceUpdate();
       getRuntime().requestBlocksUpdate();
-    } catch (_) {}
+    } catch (_) { }
   }
 
   /* ───── Project Operations ───── */
@@ -741,13 +786,12 @@ const VMC = (() => {
       log.push("Cleared project.");
     }
 
-    // ── Step 1: Create ALL sprites first (library or custom) ──
+    // ── Step 1: Create ALL sprites sequentially ──
     if (response.sprites && response.sprites.length > 0) {
-      const spritePromises = response.sprites.map(async (s) => {
+      for (const s of response.sprites) {
         try {
           if (s.libraryName) {
             await addLibrarySprite(s.libraryName);
-            // Rename if AI gave a different name
             if (s.name && s.name !== s.libraryName) {
               try { renameSprite(s.libraryName, s.name); } catch (_) { }
             }
@@ -756,14 +800,16 @@ const VMC = (() => {
             await createSprite(s);
             log.push(`Created sprite: ${s.name}`);
           }
-        } catch (e) { errors.push(`Sprite "${s.name || s.libraryName}": ${e.message}`); }
-      });
-      await Promise.all(spritePromises);
+        } catch (e) {
+          errors.push(`Sprite "${s.name || s.libraryName}": ${e.message}\n${e.stack || ""}`);
+          console.error("[ScratchCopilot] Sprite error:", e);
+        }
+      }
     }
 
-    // ── Step 2: Add costumes (library or custom) ──
+    // ── Step 2: Add costumes sequentially ──
     if (response.costumes && response.costumes.length > 0) {
-      const costumePromises = response.costumes.map(async (c) => {
+      for (const c of response.costumes) {
         try {
           if (c.libraryName) {
             await addLibraryCostume(c.libraryName, c.spriteName);
@@ -772,14 +818,16 @@ const VMC = (() => {
             await addCostumeToSprite(c.spriteName, c);
             log.push(`Added costume "${c.name}" → ${c.spriteName}`);
           }
-        } catch (e) { errors.push(`Costume: ${e.message}`); }
-      });
-      await Promise.all(costumePromises);
+        } catch (e) {
+          errors.push(`Costume: ${e.message}\n${e.stack || ""}`);
+          console.error("[ScratchCopilot] Costume error:", e);
+        }
+      }
     }
 
-    // ── Step 3: Add sounds (library or custom) ──
+    // ── Step 3: Add sounds sequentially ──
     if (response.sounds && response.sounds.length > 0) {
-      const soundPromises = response.sounds.map(async (s) => {
+      for (const s of response.sounds) {
         try {
           if (s.libraryName) {
             await addLibrarySound(s.libraryName, s.spriteName);
@@ -788,12 +836,14 @@ const VMC = (() => {
             await addSoundToSprite(s.spriteName, s);
             log.push(`Added sound "${s.name}" → ${s.spriteName}`);
           }
-        } catch (e) { errors.push(`Sound: ${e.message}`); }
-      });
-      await Promise.all(soundPromises);
+        } catch (e) {
+          errors.push(`Sound: ${e.message}\n${e.stack || ""}`);
+          console.error("[ScratchCopilot] Sound error:", e);
+        }
+      }
     }
 
-    // ── Step 4: Add backdrops ──
+    // ── Step 4: Add backdrops sequentially ──
     if (response.backdrops && response.backdrops.length > 0) {
       for (const b of response.backdrops) {
         try {
@@ -801,16 +851,25 @@ const VMC = (() => {
             await addLibraryBackdrop(b.libraryName);
             log.push(`Loaded library backdrop: ${b.libraryName}`);
           }
-        } catch (e) { errors.push(`Backdrop: ${e.message}`); }
+        } catch (e) {
+          errors.push(`Backdrop: ${e.message}\n${e.stack || ""}`);
+          console.error("[ScratchCopilot] Backdrop error:", e);
+        }
       }
     }
 
-    // ── Step 5: Inject blocks for ALL sprites concurrently ──
+    // ── Step 5: Inject blocks for ALL sprites sequentially ──
     if (response.blocks && response.blocks.length > 0) {
-      const blockPromises = response.blocks.map(async (blockSet) => {
+      for (const blockSet of response.blocks) {
         try {
           const spriteName = blockSet.spriteName;
-          if (!getTarget(spriteName)) await createSprite({ name: spriteName });
+          let target = getTarget(spriteName);
+          if (!target) {
+            target = await createSprite({ name: spriteName });
+          }
+          
+          // Switch to this sprite so blocks are visible in the editor
+          try { getVM().setEditingTarget(target.id); } catch(_) {}
 
           const exts = detectRequiredExtensions(blockSet.scripts || []);
           for (const ext of exts) await ensureExtension(ext);
@@ -821,8 +880,7 @@ const VMC = (() => {
           }
 
           injectBlocks(spriteName, parsedScripts);
-          const scriptCount = parsedScripts.length;
-          
+
           let blockCount = 0;
           function countBlocks(arr) {
             if (!Array.isArray(arr)) return;
@@ -830,7 +888,7 @@ const VMC = (() => {
               if (item && typeof item === "object" && !Array.isArray(item)) {
                 blockCount++;
                 if (item.inputs) {
-                   Object.values(item.inputs).forEach(val => countBlocks(val));
+                  Object.values(item.inputs).forEach(val => countBlocks(val));
                 }
               } else if (Array.isArray(item)) {
                 countBlocks(item);
@@ -839,10 +897,12 @@ const VMC = (() => {
           }
           parsedScripts.forEach(s => countBlocks(s.blocks || s));
 
-          log.push(`Injected ${scriptCount} script(s) (${blockCount} blocks) → ${spriteName}`);
-        } catch (e) { errors.push(`Blocks "${blockSet.spriteName}": ${e.message}`); }
-      });
-      await Promise.all(blockPromises);
+          log.push(`Injected ${parsedScripts.length} script(s) (${blockCount} blocks) → ${spriteName}`);
+        } catch (e) {
+          errors.push(`Blocks "${blockSet.spriteName}": ${e.message}\n${e.stack || ""}`);
+          console.error("[ScratchCopilot] Blocks error:", e);
+        }
+      }
     }
 
     // ── Step 6: Execute actions ──
@@ -852,7 +912,10 @@ const VMC = (() => {
         try {
           await executeAction(action);
           log.push(`Action: ${action.type}`);
-        } catch (e) { errors.push(`Action "${action.type}": ${e.message}`); }
+        } catch (e) {
+          errors.push(`Action "${action.type}": ${e.message}\n${e.stack || ""}`);
+          console.error("[ScratchCopilot] Action error:", e);
+        }
       }
     }
 
