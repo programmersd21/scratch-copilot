@@ -1,5 +1,7 @@
 # Scratch Copilot AI
 
+![Demo](screenshots/demo.png)
+
 Scratch Copilot AI is a powerful Chrome extension that acts as an intelligent assistant for the [Scratch](https://scratch.mit.edu) editor. It empowers users to create, modify, and control their Scratch projects using natural language through an integrated Gemini AI chat interface.
 
 ## 🚀 Features
