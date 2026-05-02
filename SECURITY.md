@@ -4,7 +4,7 @@ We take the security of our users seriously. If you have found a security vulner
 
 ## Reporting a Vulnerability
 
-Please do not open a public issue. Instead, send an email to **security@scratch-copilot.org** (or equivalent contact).
+Please do not open a public issue. Instead, send an email to **geniussantu1983@gmail.com**.
 
 Include the following in your report:
 - A description of the vulnerability.

@@ -1,13 +1,37 @@
 {
   "manifest_version": 3,
   "name": "Scratch Copilot",
-  "version": "1.0.1",
-  "description": "AI-powered copilot for Scratch. Generate games with natural language.",
-  "permissions": [],
+  "version": "2.0.0",
+  "description": "AI-powered assistant for Scratch using Google Gemini — create sprites, add blocks, and control your project with natural language.",
+  "icons": {
+    "128": "icons/icon128.png"
+  },
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://scratch.mit.edu/*",
+    "https://assets.scratch.mit.edu/*",
+    "https://cdn.assets.scratch.mit.edu/*",
+    "https://cdn.jsdelivr.net/*",
+    "https://generativelanguage.googleapis.com/*"
+  ],
   "content_scripts": [
     {
       "matches": ["https://scratch.mit.edu/projects/*"],
-      "js": ["vmController.js", "aiClient.js", "ui.js", "content.js"],
+      "js": [
+        "src/logger.js",
+        "src/vmHook.js",
+        "src/vmController.js",
+        "src/assetManager.js",
+        "src/blockBuilder.js",
+        "src/spriteController.js",
+        "src/variableManager.js",
+        "src/extensionLoader.js",
+        "src/projectSerializer.js",
+        "src/debugPanel.js",
+        "src/aiClient.js",
+        "src/ui.js",
+        "src/content.js"
+      ],
       "run_at": "document_idle",
       "world": "MAIN"
     }

@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-05-02
+
+### Changed
+- **Major Restructuring**: Reorganized project structure—all source files moved from root to `src/` directory.
+- Updated manifest to version 2.0.0 with improved permissions and host_permissions declarations.
+- Enhanced manifest description to clarify Gemini AI integration.
+
+### Added
+- New modular architecture with dedicated utilities: `logger.js`, `vmHook.js`, `assetManager.js`, `blockBuilder.js`, `spriteController.js`, `variableManager.js`, `extensionLoader.js`, `projectSerializer.js`, and `debugPanel.js`.
+- Icon support (128x128) for improved extension branding.
+- Explicit host permissions for Scratch resources and Gemini API endpoints.
+
+### Security
+- Updated security contact email in SECURITY.md.
+
 ## [1.0.0] - 2026-04-30
 
 ### Added
