@@ -93,7 +93,18 @@
   }
 
   function getStageTarget() {
-    return requireVM().runtime.targets.find((t) => t.isStage) || null;
+    const vm = getVM();
+    if (!vm || !vm.runtime || !vm.runtime.targets) return null;
+    let stage = vm.runtime.targets.find((t) => t.isStage);
+    if (!stage) {
+      // Fallback: sometimes the stage is just the first target if not explicitly marked
+      stage = vm.runtime.targets[0];
+      if (stage && !stage.isStage) {
+         // If the first one isn't a stage, search for anything that might be it
+         stage = vm.runtime.targets.find(t => t.getName?.() === "Stage" || t.sprite?.name === "Stage");
+      }
+    }
+    return stage || null;
   }
 
   function resolveTarget(name) {

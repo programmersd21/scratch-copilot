@@ -84,6 +84,8 @@
     "event_whenflagclicked", "event_whenkeypressed", "event_whenthisspriteclicked",
     "event_whenbackdropswitchesto", "event_whengreaterthan", "event_whenbroadcastreceived",
     "control_start_as_clone", "procedures_definition",
+    "faceSensing_whenFaceDetected", "faceSensing_whenTilted",
+    "faceSensing_whenSpriteTouchesPart",
   ]);
   const INTERNAL_OPCODES = new Set([
     "text", "math_number", "math_positive_number", "math_whole_number", "math_integer",
@@ -96,11 +98,11 @@
   ]);
   const OPCODE_PREFIXES = [
     "motion", "looks", "sound", "event", "control", "sensing", "operator", "data",
-    "procedures", "pen", "music", "videoSensing", "text2speech", "translate",
+    "procedures", "pen", "music", "videoSensing", "faceSensing", "text2speech", "translate",
     "makeymakey", "microbit", "ev3", "boost", "wedo2", "gdxfor",
   ];
   const EXTENSION_PREFIXES = new Set([
-    "pen", "music", "videoSensing", "text2speech", "translate",
+    "pen", "music", "videoSensing", "faceSensing", "text2speech", "translate",
     "makeymakey", "microbit", "ev3", "boost", "wedo2", "gdxfor",
   ]);
   const KNOWN_EXTENSION_OPCODES = new Set([
@@ -110,6 +112,8 @@
     "music_setInstrument", "music_setTempo", "music_changeTempo", "music_getTempo",
     "translate_getTranslate", "translate_getViewerLanguage", "translate_menu_languages",
     "text2speech_speakAndWait", "text2speech_setVoice", "text2speech_setLanguage",
+    "faceSensing_goToPart", "faceSensing_pointInFaceTiltDirection", "faceSensing_setSizeToFaceSize",
+    "faceSensing_faceIsDetected", "faceSensing_faceTilt", "faceSensing_faceSize",
   ]);
   const OPCODE_ALIASES = {
     pen_eraseAll: "pen_clear",
@@ -470,6 +474,9 @@
       sound_play: { SOUND_MENU: ["menu", "sound_sounds_menu", "SOUND_MENU", "Meow"] },
       looks_switchcostumeto: { COSTUME: ["menu", "looks_costume", "COSTUME", "costume1"] },
       looks_switchbackdropto: { BACKDROP: ["menu", "looks_backdrops", "BACKDROP", "backdrop1"] },
+      faceSensing_goToPart: { PART: ["menu", "faceSensing_menu_PART", "PART", "2"] },
+      faceSensing_whenSpriteTouchesPart: { PART: ["menu", "faceSensing_menu_PART", "PART", "2"] },
+      faceSensing_whenTilted: { DIRECTION: ["menu", "faceSensing_menu_DIRECTION", "DIRECTION", "left"] },
     };
 
     const DEFAULT_FIELDS = {

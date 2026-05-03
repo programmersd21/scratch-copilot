@@ -6,8 +6,8 @@ Scratch Copilot AI is a powerful Chrome extension that acts as an intelligent as
 
 ## 🚀 Features
 
-- **Natural Language Coding**: Generate complex Scratch block scripts using simple English prompts.
-- **Automated Asset Management**: Automatically create and add sprites, costumes, sounds, and backdrops to your project.
+- **Expert Level Coding**: Generates code based on the "Griffpatch Manifesto"—enforcing single-script architectures, high-performance game loops, and velocity-based physics.
+- **Advanced Extension Support**: Built-in support for Face Sensing, Video Sensing, Pen, Music, and more with verified opcode mapping.
 - **Smart VM Control**: Real-time control of the Scratch VM, including green flag triggers, variable setting, and sprite manipulation.
 - **Project Inspection**: Quickly summarize your current Scratch project state.
 - **Modern UI**: Sleek, dark-themed, and responsive interface with an easy-to-access 🤖 launcher.

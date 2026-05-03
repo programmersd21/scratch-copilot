@@ -10,7 +10,7 @@
   const hook = () => SC.vmHook;
 
   const BUILTIN_EXTENSIONS = new Set([
-    "pen", "music", "videoSensing", "text2speech", "translate",
+    "pen", "music", "videoSensing", "text2speech", "translate", "faceSensing",
     "makeymakey", "microbit", "ev3", "boost", "wedo2", "gdxfor",
   ]);
 
@@ -26,6 +26,9 @@
     gdx_for: "gdxfor",
     gdxforce: "gdxfor",
     gdxfor: "gdxfor",
+    facesensing: "faceSensing",
+    face_sensing: "faceSensing",
+    faceSensing: "faceSensing",
   };
 
   function normaliseExtensionId(extensionId) {

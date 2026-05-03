@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-05-03
+
+### Added
+- **Face Sensing Extension Support**: Full integration with Scratch's Face Sensing extension, including verified opcodes, numeric argument mapping, and automated intent detection.
+- **"Face Mask Game" Template**: New home page button for quickly generating face-tracking projects.
+- **Expert Coding Rules**: Implemented the "Griffpatch Manifesto" in the AI system prompt to enforce "Single Script Architecture" and eliminate redundant logic branching.
+
+### Fixed
+- **Hardened Target Resolution**: Improved `getStageTarget` and `deleteSprite` in `vmHook.js` and `spriteController.js` to be more resilient against race conditions and missing sprites.
+- **Block Injection Accuracy**: Fixed opcode and argument names for extension blocks based on live VM inspection (e.g., corrected `faceSensing_goToPart` and numeric part IDs).
+
 ## [2.0.0] - 2026-05-02
 
 ### Changed

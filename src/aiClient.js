@@ -52,7 +52,7 @@ RULES:
 3. If user refers to an existing sprite, use its exact name from PROJECT STATE.
 4. Always include event_whenflagclicked to initialize positions, variables, loops.
 5. For games: implement full logic — score, win/loss, smooth movement.
-6. When the user asks for music, speech, translate, pen, video sensing, or any extension, the main behavior MUST use that extension's blocks. Do not fake extension behavior with ordinary sounds or unrelated movement.
+6. When the user asks for music, speech, translate, pen, video sensing, face sensing, or any extension, the main behavior MUST use that extension's blocks. Do not fake extension behavior with ordinary sounds or unrelated movement.
 7. NEVER use 'motion_goto' with 'mouse-pointer' unless the user explicitly mentions 'mouse', 'cursor', or 'follow'. Use exact coordinates (motion_gotoxy) for math and graphs.
 8. LOGIC PRIORITY: Never use equality (=) for position checks. Sprites skip exact values.
    - For POSITIVE boundaries (right/top): use (Reporter > Number), e.g., (x position > 230).
@@ -61,14 +61,15 @@ RULES:
 9. If your plan creates new sprites and does not add any scripts to the default 'Sprite1', you MUST include a 'deleteSprite' action for 'Sprite1' in the 'actions' array to keep the project clean.
 10. ASSET ORIENTATION: 'Rocketship' library assets face right (90 degrees). Default to direction 90 for rockets.
 11. GRIFFPATCH MANIFESTO (EXPERT LEVEL):
-    - NO KID STUFF: Do not use simple 'move 10 steps' for player movement. Use velocity (speedX, speedY) and friction (multiply speed by 0.8).
+    - NO KID STUFF: Do not use simple 'move 10 steps' or multiple event hats (e.g. 'when key pressed' or 'when face tilts').
+    - SINGLE SCRIPT ARCHITECTURE: Consolidate ALL interaction logic into the main 'when flag clicked' -> 'forever' loop using 'if' and 'if/else' branches. Redundant hats are strictly forbidden.
+    - ELIMINATE REDUNDANCY: Never create 'if/else' blocks where both branches perform the same action. Never use blocks that don't change state (e.g., switching to a costume the sprite is already wearing). Every block must have a meaningful purpose.
     - WASD PHYSICS: Use 'speed' variables. if key w: change speed by 1; if not key w: set speed to (speed * 0.9).
     - MODULARITY: Separate code into Custom Blocks (procedures). One for 'Handle Input', one for 'Physics', one for 'Render'.
     - 3D RAYCASTING:
       - Define a 'Raycast' custom block with 'warp':'true'.
       - Rendering: Clear pen, move to x: -240, repeat 480 times (for each column): calculate distance, draw vertical line.
     - NO HALLUCINATIONS: Do not use 'control_for_each'. Use 'control_repeat' with a variable (e.g., 'i') for loops.
-
 JSON SCHEMA:
 {
   "sprites": [{"name":"str","libraryName":"str","x":0,"y":0,"size":100,"direction":90}],
@@ -80,7 +81,7 @@ JSON SCHEMA:
   "lists": [{"spriteName":"Stage","name":"str","initialValues":[]}],
   "actions": [
     {"type":"greenFlag|stop|setPosition|setSize|setDirection|setVisibility|clearBlocks|deleteSprite|duplicateSprite|renameSprite","spriteName":"str","params":{}},
-    {"type":"extension","params":{"extensionId":"pen|music|videoSensing|text2speech|translate"}}
+    {"type":"extension","params":{"extensionId":"pen|music|videoSensing|faceSensing|text2speech|translate"}}
   ],
   "message":"Summary of what was done"
 }
@@ -107,6 +108,13 @@ Sprites: ${sprites}
 Sounds: ${sounds}
 Backdrops: ${backdrops}
 ${ctx}
+
+EXTENSION GUIDE - FACE SENSING:
+- Use 'faceSensing_goToPart' with input 'PART' as a menu. INTERNAL VALUES MUST BE STRINGS: nose:"2", mouth:"3", left eye:"0", right eye:"1", between eyes:"6", left ear:"4", right ear:"5", top of head:"7".
+- Use 'faceSensing_pointInFaceTiltDirection' to point in face tilt direction.
+- Use 'faceSensing_setSizeToFaceSize' to set size to face size.
+- Hat blocks: 'faceSensing_whenFaceDetected', 'faceSensing_whenTilted' (input DIRECTION: left|right), 'faceSensing_whenSpriteTouchesPart' (input PART: "2" for nose).
+- Reporters: 'faceSensing_faceIsDetected' (boolean), 'faceSensing_faceTilt' (number), 'faceSensing_faceSize' (number).
 
 TIPS:
 - SMOOTH PHYSICS: use 'speed' variable. 'change speed by (1 * (sensing_keypressed(w) - sensing_keypressed(s)))'. 'set speed to (speed * 0.9)'. 'move (speed) steps'.

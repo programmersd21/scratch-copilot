@@ -77,7 +77,10 @@
   function deleteSprite(spriteName) {
     const h = hook(); const vm = h.requireVM();
     const target = h.findTargetByName(spriteName);
-    if (!target) throw new Error(`Sprite "${spriteName}" not found`);
+    if (!target) {
+      log.warn(`deleteSprite: Sprite "${spriteName}" not found, skipping.`);
+      return;
+    }
     if (target.isStage) throw new Error("Cannot delete the Stage");
     vm.deleteSprite(target.id);
     h.safeEmitWorkspaceUpdate(vm);

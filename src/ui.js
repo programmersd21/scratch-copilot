@@ -507,6 +507,7 @@
             <span class="example-prompt" data-prompt="Add a space backdrop and a rocket sprite that flies upward">🚀 Space scene</span>
             <span class="example-prompt" data-prompt="Make a ball that bounces around and plays a sound when it hits the edge">🎵 Bouncing ball</span>
             <span class="example-prompt" data-prompt="Create a simple quiz game that asks the user their name and says hello">💬 Quiz game</span>
+            <span class="example-prompt" data-prompt="Create a face-tracking game where a mask sprite follows my nose and changes costumes when I tilt my head">🎭 Face mask game</span>
           </div>
         </div>
       </div>
@@ -993,6 +994,24 @@
     const wantsMusic = /\bmusic\b|\bbeat\b|\bdrum\b/.test(prompt);
     const wantsSpeech = /\bspeech\b|\bspeak\b|\bvoice\b|\btext\s*to\s*speech\b|\btts\b/.test(prompt);
     const wantsTranslate = /\btranslate\b|\btranslation\b/.test(prompt);
+    const wantsFace = /\bface\b|\bnose\b|\beye\b|\bear\b/.test(prompt);
+
+    if (wantsFace) {
+      ensureAction(plan, "faceSensing");
+      if (!planHasOpcode(plan, "faceSensing_")) {
+        const spriteName = chooseBlockSprite(plan);
+        ensureSpriteForBlocks(plan, spriteName);
+        addScript(plan, spriteName, [
+          { opcode: "event_whenflagclicked" },
+          { opcode: "faceSensing_goToPart", inputs: { PART: [1, [1, "2"]] } },
+          { opcode: "control_forever", inputs: {
+            SUBSTACK: [
+              { opcode: "faceSensing_goToPart", inputs: { PART: [1, [1, "2"]] } },
+            ]
+          }},
+        ]);
+      }
+    }
 
     if (wantsMusic) {
       ensureAction(plan, "music");
