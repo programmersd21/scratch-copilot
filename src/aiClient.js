@@ -1,6 +1,7 @@
 /**
  * aiClient.js
- * Google Gemini AI integration for Scratch Copilot.
+ * Multi-provider AI integration for Scratch Copilot.
+ * Supports Gemini, OpenAI, OpenRouter, and Groq.
  * Translates natural language prompts into structured Scratch JSON.
  */
 (function () {
@@ -8,22 +9,124 @@
   const SC = (window.ScratchCopilot = window.ScratchCopilot || {});
   const log = SC.logger?.createLogger("aiClient") || console;
 
-  const GEMINI_MODEL = "gemini-3.1-flash-lite-preview";
-  const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
   const MAX_RETRIES = 3;
   const TIMEOUT_MS = 90000;
-  const API_KEY_STORAGE = "scratchCopilot_geminiApiKey";
 
-  function getApiKey() { return localStorage.getItem(API_KEY_STORAGE) || ""; }
-  function setApiKey(key) { localStorage.setItem(API_KEY_STORAGE, key.trim()); }
-  function hasApiKey() { return Boolean(getApiKey()); }
+  // ─── Storage keys ────────────────────────────────────────────────────────
+  const STORAGE = {
+    provider: "scratchCopilot_aiProvider",
+    key: (p) => `scratchCopilot_${p}ApiKey`,
+    model: (p) => `scratchCopilot_${p}Model`,
+  };
 
+  // ─── Provider definitions ────────────────────────────────────────────────
+  const PROVIDERS = {
+    gemini: {
+      id: "gemini",
+      label: "Google Gemini",
+      defaultModel: "gemini-2.0-flash",
+      endpoint: (model) =>
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+      keyPlaceholder: "AIza...",
+      helpUrl: "https://aistudio.google.com/app/apikey",
+      helpLabel: "aistudio.google.com",
+      authType: "query", // API key passed as ?key= query param
+      format: "gemini", // Gemini-native request/response format
+    },
+    openai: {
+      id: "openai",
+      label: "OpenAI",
+      defaultModel: "gpt-4o",
+      endpoint: () => "https://api.openai.com/v1/chat/completions",
+      keyPlaceholder: "sk-...",
+      helpUrl: "https://platform.openai.com/api-keys",
+      helpLabel: "platform.openai.com",
+      authType: "bearer",
+      format: "openai", // OpenAI chat completions format
+    },
+    openrouter: {
+      id: "openrouter",
+      label: "OpenRouter",
+      defaultModel: "openrouter/free",
+      endpoint: () => "https://openrouter.ai/api/v1/chat/completions",
+      keyPlaceholder: "sk-or-...",
+      helpUrl: "https://openrouter.ai/keys",
+      helpLabel: "openrouter.ai",
+      authType: "bearer",
+      format: "openai",
+    },
+    groq: {
+      id: "groq",
+      label: "Groq",
+      defaultModel: "openai/gpt-oss-120b",
+      endpoint: () => "https://api.groq.com/openai/v1/chat/completions",
+      keyPlaceholder: "gsk_...",
+      helpUrl: "https://console.groq.com/keys",
+      helpLabel: "console.groq.com",
+      authType: "bearer",
+      format: "openai",
+    },
+  };
+
+  const DEFAULT_PROVIDER = localStorage.getItem(STORAGE.key("gemini")) ? "gemini" : "groq";
+
+  // ─── Settings helpers ────────────────────────────────────────────────────
+  function getProvider() {
+    const p = localStorage.getItem(STORAGE.provider) || "";
+    return PROVIDERS[p] ? p : DEFAULT_PROVIDER;
+  }
+
+  function setProvider(id) {
+    if (!PROVIDERS[id]) throw new Error(`Unknown provider: ${id}`);
+    localStorage.setItem(STORAGE.provider, id);
+  }
+
+  function getProviderConfig() {
+    return PROVIDERS[getProvider()];
+  }
+
+  function getApiKey(providerId) {
+    const p = providerId || getProvider();
+    return localStorage.getItem(STORAGE.key(p)) || "";
+  }
+
+  function setApiKey(key, providerId) {
+    const p = providerId || getProvider();
+    localStorage.setItem(STORAGE.key(p), key.trim());
+  }
+
+  function hasApiKey(providerId) {
+    return Boolean(getApiKey(providerId));
+  }
+
+  function getModel(providerId) {
+    const p = providerId || getProvider();
+    return localStorage.getItem(STORAGE.model(p)) || PROVIDERS[p].defaultModel;
+  }
+
+  function setModel(model, providerId) {
+    const p = providerId || getProvider();
+    localStorage.setItem(STORAGE.model(p), model.trim());
+  }
+
+  function getProviders() {
+    return Object.values(PROVIDERS).map((p) => ({
+      id: p.id,
+      label: p.label,
+      defaultModel: p.defaultModel,
+      keyPlaceholder: p.keyPlaceholder,
+      helpUrl: p.helpUrl,
+      helpLabel: p.helpLabel,
+    }));
+  }
+
+  // ─── System prompt (shared across all providers) ─────────────────────────
   function buildSystemPrompt(libraryNames, projectSummary, opcodeLibrary) {
     const sprites = (libraryNames?.spriteNames || []).slice(0, 100).join(", ");
     const sounds = (libraryNames?.soundNames || []).slice(0, 80).join(", ");
     const backdrops = (libraryNames?.backdropNames || []).slice(0, 80).join(", ");
     const ctx = projectSummary ? `\n\nCURRENT PROJECT STATE:\n${JSON.stringify(projectSummary, null, 2)}` : "";
-    
+
     let opcodeContext = "";
     if (opcodeLibrary) {
       opcodeContext = "\n\nAVAILABLE BLOCKS (OPCODES):\n";
@@ -128,46 +231,8 @@ TIPS:
 - If a block is a reporter (rounded), it MUST be nested inside an input of another block. Never place reporters as top-level blocks or inside SUBSTACK arrays directly.`;
   }
 
-  async function callGemini(prompt, libraryNames, projectSummary, opcodeLibrary) {
-    const apiKey = getApiKey();
-    if (!apiKey) throw new Error("No API key configured");
-    const systemPrompt = buildSystemPrompt(libraryNames, projectSummary, opcodeLibrary);
-    const payload = {
-      system_instruction: { parts: [{ text: systemPrompt }] },
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.15, maxOutputTokens: 8192, responseMimeType: "application/json" },
-      safetySettings: [
-        { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
-        { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
-        { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
-        { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
-      ],
-    };
-    const url = `${GEMINI_ENDPOINT}?key=${apiKey}`;
-    const ctrl = new AbortController();
-    const tid = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
-    try {
-      const res = await fetch(url, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload), signal: ctrl.signal,
-      });
-      clearTimeout(tid);
-      if (!res.ok) {
-        const body = await res.text();
-        throw new Error(`Gemini API ${res.status}: ${body.slice(0, 200)}`);
-      }
-      const data = await res.json();
-      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-      if (!text) throw new Error("Empty response from Gemini");
-      return parseGeminiResponse(text);
-    } catch (err) {
-      clearTimeout(tid);
-      if (err.name === "AbortError") throw new Error("Request timed out (90s)");
-      throw err;
-    }
-  }
-
-  function parseGeminiResponse(text) {
+  // ─── Response parser (shared) ────────────────────────────────────────────
+  function parseResponse(text) {
     const cleaned = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
     let parsed;
     try { parsed = JSON.parse(cleaned); }
@@ -189,11 +254,114 @@ TIPS:
     };
   }
 
+  // ─── Gemini-native call ──────────────────────────────────────────────────
+  async function callGemini(prompt, systemPrompt, cfg) {
+    const apiKey = getApiKey(cfg.id);
+    if (!apiKey) throw new Error(`No API key configured for ${cfg.label}`);
+    const model = getModel(cfg.id);
+    const payload = {
+      system_instruction: { parts: [{ text: systemPrompt }] },
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.15, maxOutputTokens: 8192, responseMimeType: "application/json" },
+      safetySettings: [
+        { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+        { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+        { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+        { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
+      ],
+    };
+    const url = `${cfg.endpoint(model)}?key=${apiKey}`;
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: ctrl.signal,
+      });
+      clearTimeout(tid);
+      if (!res.ok) {
+        const body = await res.text();
+        throw new Error(`${cfg.label} API ${res.status}: ${body.slice(0, 200)}`);
+      }
+      const data = await res.json();
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      if (!text) throw new Error(`Empty response from ${cfg.label}`);
+      return parseResponse(text);
+    } catch (err) {
+      clearTimeout(tid);
+      if (err.name === "AbortError") throw new Error("Request timed out (90s)");
+      throw err;
+    }
+  }
+
+  // ─── OpenAI-compatible call (OpenAI, OpenRouter, Groq) ───────────────────
+  async function callOpenAICompatible(prompt, systemPrompt, cfg) {
+    const apiKey = getApiKey(cfg.id);
+    if (!apiKey) throw new Error(`No API key configured for ${cfg.label}`);
+    const model = getModel(cfg.id);
+    const payload = {
+      model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: prompt },
+      ],
+      temperature: 0.15,
+      max_tokens: 8192,
+      response_format: { type: "json_object" },
+    };
+    const headers = {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    };
+    // OpenRouter recommends these optional headers
+    if (cfg.id === "openrouter") {
+      headers["HTTP-Referer"] = "https://scratch.mit.edu";
+      headers["X-Title"] = "Scratch Copilot";
+    }
+    const url = cfg.endpoint(model);
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload),
+        signal: ctrl.signal,
+      });
+      clearTimeout(tid);
+      if (!res.ok) {
+        const body = await res.text();
+        throw new Error(`${cfg.label} API ${res.status}: ${body.slice(0, 200)}`);
+      }
+      const data = await res.json();
+      const text = data?.choices?.[0]?.message?.content || "";
+      if (!text) throw new Error(`Empty response from ${cfg.label}`);
+      return parseResponse(text);
+    } catch (err) {
+      clearTimeout(tid);
+      if (err.name === "AbortError") throw new Error("Request timed out (90s)");
+      throw err;
+    }
+  }
+
+  // ─── Unified call dispatcher ─────────────────────────────────────────────
+  async function callAI(prompt, libraryNames, projectSummary, opcodeLibrary) {
+    const cfg = getProviderConfig();
+    const systemPrompt = buildSystemPrompt(libraryNames, projectSummary, opcodeLibrary);
+    if (cfg.format === "gemini") {
+      return callGemini(prompt, systemPrompt, cfg);
+    }
+    return callOpenAICompatible(prompt, systemPrompt, cfg);
+  }
+
+  // ─── Public sendPrompt with retry ────────────────────────────────────────
   async function sendPrompt(userMessage, libraryNames, projectSummary, opcodeLibrary) {
     let lastError;
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
-        return await callGemini(userMessage, libraryNames, projectSummary, opcodeLibrary);
+        return await callAI(userMessage, libraryNames, projectSummary, opcodeLibrary);
       } catch (err) {
         lastError = err;
         log.warn(`AI attempt ${attempt}/${MAX_RETRIES} failed: ${err.message}`);
@@ -204,6 +372,18 @@ TIPS:
     throw lastError;
   }
 
-  SC.aiClient = { sendPrompt, getApiKey, setApiKey, hasApiKey, parseGeminiResponse };
+  // ─── Public API ──────────────────────────────────────────────────────────
+  SC.aiClient = {
+    sendPrompt,
+    getProvider,
+    setProvider,
+    getApiKey,
+    setApiKey,
+    hasApiKey,
+    getModel,
+    setModel,
+    getProviders,
+    parseResponse,
+  };
   log.info("aiClient loaded");
 })();

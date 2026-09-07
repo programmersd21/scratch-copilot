@@ -198,6 +198,36 @@
     }
     #api-key-input:focus { border-color: #6366f1; }
     #api-key-input::placeholder { color: #475569; }
+    #provider-select {
+      flex: 1;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 8px;
+      color: #e2e8f0;
+      font-size: 13px;
+      padding: 8px 10px;
+      outline: none;
+      cursor: pointer;
+      transition: border-color 0.2s;
+    }
+    #provider-select:focus { border-color: #6366f1; }
+    #provider-select option { background: #1e293b; color: #e2e8f0; }
+    #model-input {
+      flex: 1;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 8px;
+      color: #e2e8f0;
+      font-size: 13px;
+      padding: 8px 10px;
+      outline: none;
+      font-family: 'Courier New', monospace;
+      transition: border-color 0.2s;
+    }
+    #model-input:focus { border-color: #6366f1; }
+    #model-input::placeholder { color: #475569; }
+    .settings-field { margin-bottom: 14px; }
+    .settings-field:last-child { margin-bottom: 0; }
     #save-key-btn {
       background: linear-gradient(135deg, #6366f1, #8b5cf6);
       border: none;
@@ -468,19 +498,24 @@
 
       <!-- Settings -->
       <div id="settings-panel">
-        <label for="api-key-input">Gemini API Key</label>
-        <div class="settings-row">
-          <input id="api-key-input" type="password"
-            placeholder="AIza..." autocomplete="off" spellcheck="false"/>
-          <button id="save-key-btn">Save Key</button>
+        <div class="settings-field">
+          <label for="provider-select">AI Provider</label>
+          <select id="provider-select"></select>
         </div>
-        <p class="settings-hint">
-          Get a free key at
-          <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">
-            aistudio.google.com
-          </a>.
-          Your key is stored only in this browser.
-        </p>
+        <div class="settings-field">
+          <label for="api-key-input" id="api-key-label">API Key</label>
+          <div class="settings-row">
+            <input id="api-key-input" type="password"
+              placeholder="" autocomplete="off" spellcheck="false"/>
+            <button id="save-key-btn">Save</button>
+          </div>
+          <p class="settings-hint" id="api-key-hint"></p>
+        </div>
+        <div class="settings-field">
+          <label for="model-input">Model (optional — leave blank for default)</label>
+          <input id="model-input" type="text"
+            placeholder="" autocomplete="off" spellcheck="false"/>
+        </div>
         <div style="margin-top: 16px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 16px;">
           <label>Actions</label>
           <div class="settings-row">
@@ -570,7 +605,11 @@
       settingsBtn: shadowRoot.getElementById("settings-btn"),
       settingsPanel: shadowRoot.getElementById("settings-panel"),
       closeBtn: shadowRoot.getElementById("close-btn"),
+      providerSelect: shadowRoot.getElementById("provider-select"),
       apiKeyInput: shadowRoot.getElementById("api-key-input"),
+      apiKeyLabel: shadowRoot.getElementById("api-key-label"),
+      apiKeyHint: shadowRoot.getElementById("api-key-hint"),
+      modelInput: shadowRoot.getElementById("model-input"),
       saveKeyBtn: shadowRoot.getElementById("save-key-btn"),
       clearChatBtn: shadowRoot.getElementById("clear-chat-btn"),
       clearProjectBtn: shadowRoot.getElementById("clear-project-btn"),
@@ -581,7 +620,8 @@
     };
 
     bindEvents();
-    restoreApiKey();
+    populateProviders();
+    restoreSettings();
     updateStatus("ready", "Ready");
 
     console.log("[Scratch Copilot] UI mounted");
@@ -601,10 +641,16 @@
       refs.settingsPanel.classList.toggle("open");
     });
 
-    // Save API key
-    refs.saveKeyBtn.addEventListener("click", saveApiKey);
+    // Provider selection
+    refs.providerSelect.addEventListener("change", onProviderChange);
+
+    // Save settings
+    refs.saveKeyBtn.addEventListener("click", saveSettings);
     refs.apiKeyInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") saveApiKey();
+      if (e.key === "Enter") saveSettings();
+    });
+    refs.modelInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") saveSettings();
     });
 
     // Clear actions
@@ -687,24 +733,97 @@
     }
   }
 
-  // ─── API Key ─────────────────────────────────────────────────────────────
+  // ─── Provider Settings ───────────────────────────────────────────────────
 
-  function restoreApiKey() {
-    const key = window.ScratchCopilot?.aiClient?.getApiKey?.() || "";
-    if (key) {
-      refs.apiKeyInput.value = key;
+  function populateProviders() {
+    const providers = window.ScratchCopilot?.aiClient?.getProviders?.() || [];
+    const current = window.ScratchCopilot?.aiClient?.getProvider?.() || "groq";
+    refs.providerSelect.innerHTML = "";
+    for (const p of providers) {
+      const opt = document.createElement("option");
+      opt.value = p.id;
+      opt.textContent = p.label;
+      if (p.id === current) opt.selected = true;
+      refs.providerSelect.appendChild(opt);
+    }
+    updateProviderUI(current);
+  }
+
+  // Only https: URLs from provider config may end up in an href attribute.
+  // Defense in depth against javascript:/data: URLs if the config is tampered
+  // with (content scripts run in the MAIN world, so window.ScratchCopilot is
+  // writable by any other script on the page).
+  function isSafeHttpsUrl(value) {
+    if (typeof value !== "string" || !value) return false;
+    try {
+      return new URL(value).protocol === "https:";
+    } catch (_) {
+      return false;
     }
   }
 
-  function saveApiKey() {
-    const val = refs.apiKeyInput.value.trim();
-    if (!val) {
-      showToast("Please enter an API key", "error");
-      return;
+  function updateProviderUI(providerId) {
+    const providers = window.ScratchCopilot?.aiClient?.getProviders?.() || [];
+    const p = providers.find(x => x.id === providerId);
+    if (!p) return;
+    refs.apiKeyLabel.textContent = `${p.label} API Key`;
+    refs.apiKeyInput.placeholder = p.keyPlaceholder;
+    // Build the hint via DOM APIs instead of innerHTML. Provider fields come
+    // back through the public window.ScratchCopilot API and must be treated
+    // as untrusted data (see isSafeHttpsUrl above).
+    refs.apiKeyHint.replaceChildren();
+    refs.apiKeyHint.append("Get a key at ");
+    const link = document.createElement("a");
+    link.textContent = p.helpLabel;
+    if (isSafeHttpsUrl(p.helpUrl)) {
+      link.href = p.helpUrl;
+      link.target = "_blank";
+      link.rel = "noopener";
     }
-    window.ScratchCopilot?.aiClient?.setApiKey?.(val);
+    refs.apiKeyHint.append(link, ". Stored only in this browser.");
+    refs.modelInput.placeholder = p.defaultModel;
+  }
+
+  function onProviderChange() {
+    const providerId = refs.providerSelect.value;
+    const providers = window.ScratchCopilot?.aiClient?.getProviders?.() || [];
+    const p = providers.find(x => x.id === providerId);
+    window.ScratchCopilot?.aiClient?.setProvider?.(providerId);
+    // Load the API key and model for the newly selected provider
+    const key = window.ScratchCopilot?.aiClient?.getApiKey?.(providerId) || "";
+    refs.apiKeyInput.value = key;
+    const model = window.ScratchCopilot?.aiClient?.getModel?.(providerId) || "";
+    refs.modelInput.value = (model && p && model !== p.defaultModel) ? model : "";
+    updateProviderUI(providerId);
+    showToast(`Switched to ${p?.label || providerId}`, "info");
+  }
+
+  function restoreSettings() {
+    const providerId = window.ScratchCopilot?.aiClient?.getProvider?.() || "groq";
+    refs.providerSelect.value = providerId;
+    const key = window.ScratchCopilot?.aiClient?.getApiKey?.(providerId) || "";
+    refs.apiKeyInput.value = key;
+    const providers = window.ScratchCopilot?.aiClient?.getProviders?.() || [];
+    const p = providers.find(x => x.id === providerId);
+    const model = window.ScratchCopilot?.aiClient?.getModel?.(providerId) || "";
+    refs.modelInput.value = (model && p && model !== p.defaultModel) ? model : "";
+    updateProviderUI(providerId);
+  }
+
+  function saveSettings() {
+    const providerId = refs.providerSelect.value;
+    const keyVal = refs.apiKeyInput.value.trim();
+    const modelVal = refs.modelInput.value.trim();
+
+    window.ScratchCopilot?.aiClient?.setApiKey?.(keyVal, providerId);
+    if (modelVal) {
+      window.ScratchCopilot?.aiClient?.setModel?.(modelVal, providerId);
+    } else {
+      // Clear custom model → fall back to default
+      window.ScratchCopilot?.aiClient?.setModel?.("", providerId);
+    }
     refs.settingsPanel.classList.remove("open");
-    showToast("API key saved ✓", "success");
+    showToast("Settings saved ✓", "success");
     updateStatus("ready", "Ready");
   }
 
@@ -724,7 +843,15 @@
       refs.statusBar.classList.add("error");
 
       if (text.includes("VM not detected")) {
-        refs.statusBar.innerHTML = `${text} — <span style="text-decoration:underline;cursor:pointer">Retry?</span>`;
+        // Status text can echo remote API error bodies — render via DOM APIs,
+        // never innerHTML, to keep untrusted text inert.
+        refs.statusBar.replaceChildren();
+        refs.statusBar.append(`${text} — `);
+        const retry = document.createElement("span");
+        retry.textContent = "Retry?";
+        retry.style.textDecoration = "underline";
+        retry.style.cursor = "pointer";
+        refs.statusBar.appendChild(retry);
         refs.statusBar.style.cursor = "pointer";
         refs.statusBar.onclick = () => {
           updateStatus("busy", "Retrying detection...");
@@ -859,8 +986,12 @@
     // Check API key
     if (!window.ScratchCopilot?.aiClient?.hasApiKey?.()) {
       refs.settingsPanel.classList.add("open");
+      const providerId = window.ScratchCopilot?.aiClient?.getProvider?.() || "AI";
+      const providers = window.ScratchCopilot?.aiClient?.getProviders?.() || [];
+      const p = providers.find(x => x.id === providerId);
+      const label = p?.label || providerId;
       addMessage(
-        "Please add your Gemini API key first (click ⚙️ or fill the field above).",
+        `Please add your ${label} API key first (click ⚙️ or fill the field above).`,
         "error"
       );
       return;
@@ -889,7 +1020,11 @@
     addLoadingMessage();
 
     try {
-      updateStatus("busy", "Asking Gemini AI…");
+      const providerId = window.ScratchCopilot?.aiClient?.getProvider?.() || "AI";
+      const providers = window.ScratchCopilot?.aiClient?.getProviders?.() || [];
+      const p = providers.find(x => x.id === providerId);
+      const label = p?.label || providerId;
+      updateStatus("busy", `Asking ${label}…`);
 
       // Gather project context
       const SC = window.ScratchCopilot;
